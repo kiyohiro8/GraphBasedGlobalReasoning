@@ -1,0 +1,21 @@
+common:
+    train_data_path: ./data/train/
+    val_data_path: ./data/val/
+    train_batch_size: 8
+    val_batch_size: 1
+    image_size: [256, 256]
+    num_class: 34
+
+network:
+    base_channels: 128
+    multi_grid: True
+    use_glore: True
+
+training:
+    lr: 0.001
+    epoch: 80
+    beta_1: 0.9
+    checkpoint_root: ./result/
+    checkpoint: 10
+    use_cuda: True
+

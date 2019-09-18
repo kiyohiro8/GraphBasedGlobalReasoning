@@ -19,11 +19,13 @@ from PIL import Image
 class SegmentationDataSet(Dataset):
     gt_dir_name = "GTs"
     image_dir_name = "images"
-    def __init__(self, path_root, transforms=None):
+    def __init__(self, path_root, num_class, transforms=None, use_weights=True):
         super(SegmentationDataSet, self).__init__()
         
         self.transforms = transforms
         self.images, self.labels = self._make_image_list(path_root)
+        if use_weights:
+            self.class_weights = self._get_class_weights(num_class)
 
         
     def __getitem__(self, idx):
@@ -47,6 +49,23 @@ class SegmentationDataSet(Dataset):
 
         return img_path_list, gt_path_list
 
+    def _get_class_weights(self, num_class):
+        count_dict = {}
+        class_weights = torch.ones(num_class)
+        total_counts = 0
+        for i in range(num_class):
+            count_dict.update({i: 0})
+        for label_path in self.labels:
+            label = imread(label_path)
+            for i in range(num_class):
+                count = (label == i).sum()
+                count_dict[i] += count / 1000
+                total_counts += count / 1000
+        for i in range(num_class):
+            class_weights[i] += total_counts / (count_dict[i] * num_class)
+        print(f"class weights: {class_weights}")
+        return class_weights
+
     def __convert_GT_name(self, path, gt_dir):
         path_list = path.split("\\")
         basename = path_list[-1]
@@ -55,18 +74,22 @@ class SegmentationDataSet(Dataset):
         return f"{gt_dir}{parent_dir}/{gt_filename}"
     
 
-def get_dataloader(path_root, batch_size, image_size=None, is_train=True):
+def get_dataloader(path_root, batch_size, num_class, image_size=None, is_train=True):
     if is_train:
         train_transforms = Compose(
             [RandomCrop(image_size), RandomHorizontalFlip(), ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         return DataLoader(SegmentationDataSet(path_root,
-                                              transforms=train_transforms),
-                                          batch_size=batch_size)
+                                              num_class,
+                                              transforms=train_transforms,
+                                              use_weights=True),
+                                              batch_size=batch_size)
     else:
         valid_transforms = Compose([ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         return DataLoader(SegmentationDataSet(path_root,
-                                          transforms=valid_transforms),
-                                          batch_size=batch_size)
+                                              num_class,
+                                              transforms=valid_transforms,
+                                              use_weights=False),
+                                              batch_size=batch_size)
 
 class RandomCrop(object):
     """Crop the given PIL Image at a random location.

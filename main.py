@@ -17,8 +17,9 @@ def train(params):
     val_data_path = params["common"]["val_data_path"]
     train_batch_size = params["common"]["train_batch_size"]
     val_batch_size = params["common"]["val_batch_size"]
-    train_dataloader = get_dataloader(train_data_path, train_batch_size, image_size, is_train=True)
-    val_dataloder = get_dataloader(val_data_path, val_batch_size, is_train=False)
+    num_class = params["common"]["num_class"]
+    train_dataloader = get_dataloader(train_data_path, train_batch_size, num_class, image_size, is_train=True)
+    val_dataloder = get_dataloader(val_data_path, val_batch_size, num_class, is_train=False)
 
     dt_now = datetime.datetime.now()
     result_dir = f"./result/{dt_now.year}{dt_now.month:0>2}{dt_now.day:0>2}-{dt_now.hour:0>2}{dt_now.minute:0>2}/"

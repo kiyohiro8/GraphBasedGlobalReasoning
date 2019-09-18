@@ -4,6 +4,7 @@ import os
 import time
 import datetime
 import shutil
+import json
 
 import numpy as np
 import pandas as pd
@@ -30,14 +31,14 @@ class Trainer(object):
         print("create data loader")
         model.to(self.device)
         optimizer = optim.Adam(model.parameters(), lr=self.lr, betas=(self.beta_1, 0.999))
-        
-        criterion = nn.CrossEntropyLoss()
+        class_weights = train_dataloader.dataset.class_weights.to(self.device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
 
         start_time = time.time()
         train_loss_list = []
         train_acc_list = []
-        val_loss_list = []
-        val_acc_list = []
+        val_iou_list = []
+        val_iou_dict_dict = {}
         print("training starts")
         for epoch in range(1, self.max_epoch+1):
             train_loss = 0
@@ -63,28 +64,19 @@ class Trainer(object):
 
             if val_dataloader is not None and epoch % self.checkpoint_epoch == 0:
                 model.eval()
-                with torch.no_grad():
-                    for i, (images, labels) in enumerate(val_dataloader):
-                        images = images.to(self.device)
-                        labels = labels.to(self.device)
-                        pred = model(images)
-                        loss = criterion(pred, labels)
-                        val_loss += loss.item()
-                        ps = torch.exp(pred)
-                        equality = (labels.data == ps.max(dim=1)[1])
-                        val_acc += equality.type(torch.FloatTensor).mean().item()
-                    val_loss /= len(val_dataloader)
-                    val_acc /= len(val_dataloader)
-                    del pred
+                confusion_dict = calculate_confusion(model, val_dataloader, self.device)
+                iou_dict = calculate_IoU(confusion_dict)
+                val_acc = iou_dict["mean"]
+                val_iou_dict_dict.update({epoch: iou_dict})
                 model.train()
             else:
-                val_loss = np.nan
+                #val_loss = np.nan
                 val_acc = np.nan
 
             train_loss_list.append(train_loss)
             train_acc_list.append(train_acc)
-            val_loss_list.append(val_loss)
-            val_acc_list.append(val_acc)
+            val_iou_list.append(val_acc)
+        
 
             if epoch % self.checkpoint_epoch == 0:
                 path = f"{result_dir}/{epoch:0>4}.pth"
@@ -93,17 +85,60 @@ class Trainer(object):
             elapsed = time.time() - start_time
             print(f"epoch{epoch} done. "
                   f"train_loss:{train_loss:.4f}, train_acc: {train_acc:.4f}, "
-                  f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}"
+                  f"val_acc: {val_acc:.4f}"
                   f" ({elapsed:.4f} sec)")
         result_df = pd.DataFrame({"epoch":list(range(1, self.max_epoch+1)),
                                   "train_loss": train_loss_list,
-                                  "val_loss": val_loss_list,
                                   "train_acc": train_acc_list,
-                                  "val_acc": val_acc_list})
+                                  "val_acc": val_iou_list})
         result_df.to_csv(f"{result_dir}/result.csv", index=False)
         path = f"{result_dir}/{self.max_epoch:0>4}.pth"
         torch.save(model.state_dict(), path)
         path_optim = f"{result_dir}/{self.max_epoch:0>4}_optim.pth"
         torch.save(optimizer.state_dict(), path_optim)
+        with open(f"{result_dir}/class_iou.json", "w") as f:
+            json.dump(val_iou_dict_dict, f)
         print(f"training ends ({elapsed} sec)")
         return model
+
+def calculate_confusion(model, dataloader, device, num_class=34):
+    result_dict = {}
+    
+    for i in range(num_class):
+        result_dict.update({i: {"TP":0,
+                                "FPFN": 0}})
+    
+    model.eval()
+    with torch.no_grad():
+        for i, (images, labels) in enumerate(dataloader):
+            images = images.to(device)
+            labels = labels.cpu().numpy()
+            
+            pred = model(images).cpu().detach().numpy()
+            pred = np.argmax(pred, 1)
+            for i in range(num_class):
+
+                TP = np.logical_and(labels==i, pred==i).sum()
+                FPFN = np.logical_xor(labels==i, pred==i).sum()
+                result_dict[i]["TP"] += TP
+                result_dict[i]["FPFN"] += FPFN
+            break
+    
+    return result_dict
+
+def calculate_IoU(confusion_dict):
+    iou_dict = {}
+    mean_IoU = 0
+    for i in confusion_dict.keys():
+        TP = confusion_dict[i]["TP"]
+        FPFN = confusion_dict[i]["FPFN"]
+        if TP+FPFN != 0:
+            IoU = TP/(TP+FPFN)
+        else:
+            IoU = 0
+        iou_dict.update({i: IoU})
+        mean_IoU += IoU
+        
+    mean_IoU /= len(iou_dict.keys())
+    iou_dict.update({"mean": mean_IoU})
+    return iou_dict

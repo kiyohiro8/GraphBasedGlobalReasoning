@@ -24,8 +24,8 @@ class SegmentationDataSet(Dataset):
         
         self.transforms = transforms
         self.images, self.labels = self._make_image_list(path_root)
-        if use_weights:
-            self.class_weights = self._get_class_weights(num_class)
+        #if use_weights:
+            #self.class_weights = self._get_class_weights(num_class)
 
         
     def __getitem__(self, idx):
@@ -51,7 +51,7 @@ class SegmentationDataSet(Dataset):
 
     def _get_class_weights(self, num_class):
         count_dict = {}
-        class_weights = torch.ones(num_class)
+        class_weights = torch.zeros(num_class)
         total_counts = 0
         for i in range(num_class):
             count_dict.update({i: 0})
@@ -63,6 +63,7 @@ class SegmentationDataSet(Dataset):
                 total_counts += count / 1000
         for i in range(num_class):
             class_weights[i] += total_counts / (count_dict[i] * num_class)
+        class_weights = 1 + torch.log(class_weights)
         print(f"class weights: {class_weights}")
         return class_weights
 

@@ -11,6 +11,8 @@ import pandas as pd
 import torch
 from torch import optim, nn
 
+from losses import FocalLoss
+
 
 class Trainer(object):
     def __init__(self, params):
@@ -31,9 +33,9 @@ class Trainer(object):
         print("create data loader")
         model.to(self.device)
         optimizer = optim.Adam(model.parameters(), lr=self.lr, betas=(self.beta_1, 0.999))
-        class_weights = train_dataloader.dataset.class_weights.to(self.device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
-
+        #class_weights = train_dataloader.dataset.class_weights.to(self.device)
+        #criterion = nn.CrossEntropyLoss(weight=class_weights)
+        criterion = FocalLoss()
         start_time = time.time()
         train_loss_list = []
         train_acc_list = []

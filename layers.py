@@ -101,16 +101,16 @@ class ResBlock(nn.Module):
         return out
     
 class ResNet50(nn.Module):
-    def __init__(self, base_channels=128, multi_grid=False):
+    def __init__(self, base_channels=64, multi_grid=False):
         
         super(ResNet50, self).__init__()
         block = ResBlock
         self.conv1 = nn.Sequential(
                 nn.Conv2d(3, base_channels//2, kernel_size=3, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(64),
+                nn.BatchNorm2d(base_channels//2),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(base_channels//2, base_channels//2, kernel_size=3, stride=1, padding=1, bias=False),
-                nn.BatchNorm2d(64),
+                nn.BatchNorm2d(base_channels//2),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(base_channels//2, base_channels, kernel_size=3, stride=1, padding=1, bias=False),
             )
@@ -186,15 +186,15 @@ class FCNHead(nn.Module):
         if self.use_glore:
             self.gcn = GloRe(inter_channels)
 
-        self.conv52 = nn.Sequential(nn.Conv2d(inter_channels, inter_channels//8, 3, padding=1, bias=False),
-                                   nn.BatchNorm2d(inter_channels//8),
+        self.conv52 = nn.Sequential(nn.Conv2d(inter_channels, inter_channels, 3, padding=1, bias=False),
+                                   nn.BatchNorm2d(inter_channels),
                                    nn.ReLU())
         
-        self.conv53 = nn.Sequential(nn.Conv2d(inter_channels//8, inter_channels//8, 3, padding=1, bias=False),
-                                   nn.BatchNorm2d(inter_channels//8),
+        self.conv53 = nn.Sequential(nn.Conv2d(inter_channels, inter_channels, 3, padding=1, bias=False),
+                                   nn.Dropout2d(0.2),
                                    nn.ReLU())
 
-        self.conv6 = nn.Sequential(nn.Dropout2d(0.1), nn.Conv2d(inter_channels//8, num_class, 1))
+        self.conv6 = nn.Sequential(nn.Dropout2d(0.1), nn.Conv2d(inter_channels, num_class, 3, padding=1, bias=False))
 
     def forward(self, x, image_size):
         x = self.conv51(x)
